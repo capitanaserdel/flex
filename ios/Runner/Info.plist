@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app requires access to your exact location to display your correct neighbourhood and competitive address in SallahFlex.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app requires access to your exact location to display your correct neighbourhood and competitive address in SallahFlex.</string>
 </dict>
 </plist>

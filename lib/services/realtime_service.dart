@@ -137,9 +137,19 @@ class RealtimeService {
           _pingTimer = Timer.periodic(const Duration(seconds: 30), (_) {
             _send({'event': 'pusher:ping', 'data': {}});
           });
-          // Re-subscribe to pending channels
+          // Re-subscribe to pending channels with dynamic authentication signatures
           for (final ch in List.from(_subscribed)) {
-            _sendSubscribe(ch);
+            if (ch.startsWith('private-')) {
+              _privateChannelAuth(ch).then((auth) {
+                if (auth != null) {
+                  _sendSubscribe(ch, auth: auth);
+                } else {
+                  debugPrint('[Reverb] ⚠️ could not auth private channel $ch');
+                }
+              });
+            } else {
+              _sendSubscribe(ch);
+            }
           }
           break;
 
@@ -178,10 +188,11 @@ class RealtimeService {
   /// Requires a private channel auth handshake against Laravel.
   Future<void> subscribeToCoins(int userId) async {
     final name = 'private-coins.$userId';
-    if (_subscribed.contains(name)) return;
-    _subscribed.add(name);
+    if (!_subscribed.contains(name)) {
+      _subscribed.add(name);
+    }
 
-    if (!_connected || _socketId == null) return; // will subscribe after connection_established
+    if (!_connected || _socketId == null) return; // will subscribe signed after connection_established
 
     final auth = await _privateChannelAuth(name);
     if (auth != null) {

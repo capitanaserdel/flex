@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/service_providers.dart';
+import '../../../services/realtime_service.dart';
 
 class StatusViewer extends ConsumerStatefulWidget {
   final List<dynamic> entries;
@@ -32,10 +33,12 @@ class _StatusViewerState extends ConsumerState<StatusViewer> with TickerProvider
   
   // Real-time subscriptions
   StreamSubscription<Map<String, dynamic>>? _voteSub;
+  RealtimeService? _realtimeService;
   
   @override
   void initState() {
     super.initState();
+    _realtimeService = ref.read(realtimeServiceProvider);
     _currentIndex = widget.initialIndex;
     
     // Create a mutable copy of the entries so we can update vote/view counts in real-time
@@ -81,7 +84,7 @@ class _StatusViewerState extends ConsumerState<StatusViewer> with TickerProvider
     final entry = _localEntries[targetIndex];
     final int entryId = entry['id'];
     
-    final realtime = ref.read(realtimeServiceProvider);
+    final realtime = _realtimeService!;
     realtime.subscribeToEntry(entryId);
     
     _voteSub = realtime.voteStream.listen((data) {
@@ -99,7 +102,7 @@ class _StatusViewerState extends ConsumerState<StatusViewer> with TickerProvider
     if (_currentIndex < _localEntries.length) {
       final entry = _localEntries[_currentIndex];
       final int entryId = entry['id'];
-      ref.read(realtimeServiceProvider).unsubscribeFromEntry(entryId);
+      _realtimeService?.unsubscribeFromEntry(entryId);
     }
   }
 

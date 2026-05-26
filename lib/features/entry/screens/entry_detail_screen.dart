@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../providers/service_providers.dart';
+import '../../../services/realtime_service.dart';
 
 class EntryDetailScreen extends ConsumerStatefulWidget {
   final int entryId;
@@ -31,10 +32,12 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   // WebSocket stream subscriptions
   StreamSubscription<Map<String, dynamic>>? _voteSub;
   StreamSubscription<Map<String, dynamic>>? _coinSub;
+  RealtimeService? _realtimeService;
 
   @override
   void initState() {
     super.initState();
+    _realtimeService = ref.read(realtimeServiceProvider);
     _fetchDetail();
     _fetchCoinsBalance();
     _subscribeToRealtime();
@@ -44,8 +47,8 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   void dispose() {
     _voteSub?.cancel();
     _coinSub?.cancel();
-    // Unsubscribe from the entry-specific WS channel
-    ref.read(realtimeServiceProvider).unsubscribeFromEntry(widget.entryId);
+    // Unsubscribe safely using cached service
+    _realtimeService?.unsubscribeFromEntry(widget.entryId);
     super.dispose();
   }
 

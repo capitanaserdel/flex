@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:dio/dio.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/app_text_styles.dart';
 import '../../../core/utils/validators.dart';
@@ -139,18 +140,69 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         desiredAccuracy: LocationAccuracy.high,
       );
 
-      // Successfully retrieved coordinates! Let's map them to the default hyperlocal location:
-      // (Kano State, Tarauni LGA, Naibawa) for SallahFlex local competition
+      // Perform real reverse-geocoding using OpenStreetMap Nominatim API
+      String displayName = "";
+      try {
+        final dio = Dio();
+        final response = await dio.get(
+          'https://nominatim.openstreetmap.org/reverse',
+          queryParameters: {
+            'format': 'json',
+            'lat': position.latitude,
+            'lon': position.longitude,
+            'zoom': 18,
+            'addressdetails': 1,
+          },
+          options: Options(
+            headers: {
+              'User-Agent': 'SallahFlexApp/1.0 (contact@sallahflex.ng)',
+            },
+          ),
+        );
+        if (response.data != null && response.data['display_name'] != null) {
+          displayName = response.data['display_name'].toString();
+        }
+      } catch (e) {
+        debugPrint('[Geolocator] Reverse geocoding error: $e');
+      }
+
+      if (displayName.isEmpty) {
+        displayName = "Lat: ${position.latitude.toStringAsFixed(4)}, Lon: ${position.longitude.toStringAsFixed(4)}";
+      } else {
+        // Truncate overly long display names
+        if (displayName.length > 80) {
+          displayName = displayName.substring(0, 80) + "...";
+        }
+        displayName = "$displayName (Lat: ${position.latitude.toStringAsFixed(4)}, Lon: ${position.longitude.toStringAsFixed(4)})";
+      }
+
+      // Check if the geocoded address matches our seeded Kano locations
+      final lowerAddress = displayName.toLowerCase();
+      int stateId = 1; // Default to Kano State
+      int lgaId = 1;   // Default to Tarauni LGA
+      int neighbourhoodId = 1; // Default to Naibawa
+
+      if (lowerAddress.contains('kano')) {
+        stateId = 1;
+        if (lowerAddress.contains('tarauni')) {
+          lgaId = 1;
+          if (lowerAddress.contains('naibawa')) {
+            neighbourhoodId = 1;
+          } else if (lowerAddress.contains('tarauni')) {
+            neighbourhoodId = 2; // Tarauni neighbourhood
+          }
+        }
+      }
+
       setState(() {
-        _locationController.text = "Naibawa, Tarauni, Kano State (Lat: ${position.latitude.toStringAsFixed(4)}, Lon: ${position.longitude.toStringAsFixed(4)})";
-        _selectedStateId = 1;
-        _selectedLgaId = 1;
-        _selectedNeighbourhoodId = 1;
+        _locationController.text = displayName;
+        _selectedStateId = stateId;
+        _selectedLgaId = lgaId;
+        _selectedNeighbourhoodId = neighbourhoodId;
       });
 
-      // Eagerly load LGA and Neighbourhood in dropdowns so form is pre-filled & editable if they want to override
-      await _fetchLgas(1);
-      await _fetchNeighbourhoods(1);
+      await _fetchLgas(stateId);
+      await _fetchNeighbourhoods(lgaId);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

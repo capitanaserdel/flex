@@ -9,18 +9,20 @@ import '../../../providers/service_providers.dart';
 class StatusViewer extends ConsumerStatefulWidget {
   final List<dynamic> entries;
   final int initialIndex;
+  final String level;
 
   const StatusViewer({
     super.key,
     required this.entries,
     required this.initialIndex,
+    required this.level,
   });
 
   @override
   ConsumerState<StatusViewer> createState() => _StatusViewerState();
 }
 
-class _StatusViewerState extends ConsumerState<StatusViewer> with SingleTickerProviderStateMixin {
+class _StatusViewerState extends ConsumerState<StatusViewer> with TickerProviderStateMixin {
   late int _currentIndex;
   late List<dynamic> _localEntries;
   
@@ -182,7 +184,7 @@ class _StatusViewerState extends ConsumerState<StatusViewer> with SingleTickerPr
     try {
       final response = await ref.read(apiServiceProvider).post('/votes/cast', data: {
         'entry_id': entryId,
-        'level': 'national', // status voting default
+        'level': widget.level,
       });
       
       if (response.data['success'] == true && mounted) {

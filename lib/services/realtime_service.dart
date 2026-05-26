@@ -8,7 +8,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// LAN IP of the backend for real devices on the same WiFi.
 /// Web testing uses 'localhost'.
-const String _reverbHost = kIsWeb ? 'localhost' : '10.12.7.162';
+const String _reverbHost = kIsWeb ? 'localhost' : '192.168.1.166';
 const int    _reverbPort = 8080;
 
 /// Reverb app key (from .env REVERB_APP_KEY)
@@ -17,7 +17,7 @@ const String _reverbAppKey = 'ewjawizvolbqa70ldyjy';
 /// Laravel API base URL for private channel auth
 const String _apiBase = kIsWeb
     ? 'http://localhost:8000/api'
-    : 'http://10.12.7.162:8000/api';
+    : 'http://192.168.1.166:8000/api';
 
 /// WebSocket handshake URL — Pusher protocol path
 String get _wsUrl =>

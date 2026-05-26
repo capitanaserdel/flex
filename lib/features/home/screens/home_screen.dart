@@ -108,6 +108,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     if (mounted) setState(() => _isLoading = false);
   }
 
+  Future<void> _handleRefresh() async {
+    await Future.wait([
+      _fetchCategories(),
+      _fetchMyEntries(),
+      _fetchFeed(),
+      _fetchCoinsBalance(),
+    ]);
+  }
+
   Future<void> _castVote(int entryId, int index) async {
     try {
       final response = await ref.read(apiServiceProvider).post('/votes/cast', data: {
@@ -484,8 +493,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        child: Column(
+      body: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        color: AppColors.accentGold,
+        backgroundColor: Colors.white,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Hero Banner Countdown
@@ -558,6 +572,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               pageBuilder: (context, _, __) => StatusViewer(
                                 entries: allStatuses,
                                 initialIndex: 0,
+                                level: _selectedLevel,
                               ),
                               transitionsBuilder: (context, animation, _, child) {
                                 return FadeTransition(opacity: animation, child: child);
@@ -638,6 +653,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           pageBuilder: (context, _, __) => StatusViewer(
                             entries: allStatuses,
                             initialIndex: startIndex,
+                            level: _selectedLevel,
                           ),
                           transitionsBuilder: (context, animation, _, child) {
                             return FadeTransition(opacity: animation, child: child);
@@ -713,6 +729,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             pageBuilder: (context, _, __) => StatusViewer(
                               entries: _myEntries,
                               initialIndex: index,
+                              level: _selectedLevel,
                             ),
                             transitionsBuilder: (context, animation, _, child) {
                               return FadeTransition(opacity: animation, child: child);
@@ -973,6 +990,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
+    ),
       bottomNavigationBar: _buildBottomNav(),
       floatingActionButton: FloatingActionButton(
         onPressed: _showCategorySelection,

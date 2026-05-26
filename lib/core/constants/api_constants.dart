@@ -6,8 +6,8 @@ class ApiConstants {
     if (kIsWeb) {
       return 'http://127.0.0.1:8000/api';
     }
-    // Connect to Mac host IP over local Wi-Fi network
-    return 'http://10.12.7.162:8000/api';
+    // Connect to Mac host IP over local Wi-Fi network (current IP is 192.168.1.166)
+    return 'http://192.168.1.166:8000/api';
   }
 
   // Auth routes

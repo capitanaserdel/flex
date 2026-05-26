@@ -18,8 +18,13 @@ class HomeScreen extends ConsumerStatefulWidget {
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   String _selectedLevel = 'neighbourhood'; // neighbourhood, lga, state, national
   int _selectedCategoryId = 1;
-  String _currentNeighbourhoodName = 'Naibawa';
+  String _currentNeighbourhoodName = 'Loading...';
   int _coinsBalance = 500;
+
+  // Real user location IDs fetched from /profile
+  int? _userNeighbourhoodId;
+  int? _userLgaId;
+  int? _userStateId;
 
   List<dynamic> _categories = [];
   List<dynamic> _entries = [];
@@ -34,6 +39,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _fetchProfile();          // load location IDs first
     _fetchCategories();
     _fetchMyEntries();
     _fetchFeed();
@@ -117,16 +123,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     } catch (_) {}
   }
 
+  Future<void> _fetchProfile() async {
+    try {
+      final response = await ref.read(apiServiceProvider).get('/profile');
+      if (response.data['success'] == true && mounted) {
+        final user = response.data['data']['user'];
+        setState(() {
+          _userNeighbourhoodId = user['neighbourhood_id'] as int?;
+          _userLgaId           = user['lga_id'] as int?;
+          _userStateId         = user['state_id'] as int?;
+          if (user['neighbourhood'] != null) {
+            _currentNeighbourhoodName = user['neighbourhood'] as String;
+          } else if (user['lga'] != null) {
+            _currentNeighbourhoodName = user['lga'] as String;
+          }
+        });
+        // Refresh feed with real IDs now that we have them
+        _fetchFeed();
+      }
+    } catch (_) {}
+  }
+
   Future<void> _fetchFeed() async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      final response = await ref.read(apiServiceProvider).get('/entries/leaderboard', queryParameters: {
+      final params = <String, dynamic>{
         'level': _selectedLevel,
         'category_id': _selectedCategoryId,
-        'neighbourhood_id': 1, // Seed neighbourhood Naibawa
-        'lga_id': 1,
-        'state_id': 1,
-      });
+      };
+      // Only attach location IDs the user actually has
+      if (_userNeighbourhoodId != null) params['neighbourhood_id'] = _userNeighbourhoodId;
+      if (_userLgaId != null)           params['lga_id']           = _userLgaId;
+      if (_userStateId != null)         params['state_id']         = _userStateId;
+
+      final response = await ref.read(apiServiceProvider).get(
+        '/entries/leaderboard',
+        queryParameters: params,
+      );
       if (response.data['success'] == true && mounted) {
         setState(() {
           _entries = response.data['data']['data'];

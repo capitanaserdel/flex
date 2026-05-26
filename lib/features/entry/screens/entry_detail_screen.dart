@@ -32,7 +32,11 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   // WebSocket stream subscriptions
   StreamSubscription<Map<String, dynamic>>? _voteSub;
   StreamSubscription<Map<String, dynamic>>? _coinSub;
+  StreamSubscription<Map<String, dynamic>>? _tierSub;
   RealtimeService? _realtimeService;
+
+  // Tier promotion banner
+  String? _promotionBanner; // e.g. '🏆 Promoted to LGA!'
 
   @override
   void initState() {
@@ -47,6 +51,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   void dispose() {
     _voteSub?.cancel();
     _coinSub?.cancel();
+    _tierSub?.cancel();
     // Unsubscribe safely using cached service
     _realtimeService?.unsubscribeFromEntry(widget.entryId);
     super.dispose();
@@ -78,6 +83,25 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
         setState(() {
           _userCoins = newBalance as int;
         });
+      }
+    });
+
+    // Subscribe to tier promotions for this entry
+    _tierSub = realtime.tierStream.listen((data) {
+      if (!mounted) return;
+      final entryId = data['entry_id'];
+      if (entryId != null && entryId.toString() == widget.entryId.toString()) {
+        final newLevel = data['new_level'] as String? ?? '';
+        final label = {'lga': 'LGA 🌍', 'state': 'State 🌟', 'national': 'National 🇳🇬'}[newLevel] ?? newLevel;
+        setState(() {
+          _promotionBanner = '🏆 Entry promoted to $label competition!';
+        });
+        // Auto-dismiss after 6 seconds
+        Future.delayed(const Duration(seconds: 6), () {
+          if (mounted) setState(() => _promotionBanner = null);
+        });
+        // Refresh entry data
+        _fetchDetail(showLoading: false);
       }
     });
   }
@@ -560,6 +584,265 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
     );
   }
 
+  // ── Tier Progression Widgets ──────────────────────────────────────────────
+
+  Widget _buildPromotionBanner(String message) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) => Transform.scale(
+        scale: value,
+        child: child,
+      ),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFD700), Color(0xFFFFA500)],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFFFD700).withOpacity(0.4),
+              blurRadius: 16,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Text('🏆', style: TextStyle(fontSize: 28)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTierProgressPanel(Map<String, dynamic> tier) {
+    final currentLevel = tier['current_level'] as String? ?? 'street';
+    final currentVotes = tier['current_votes'] as int? ?? 0;
+    final nextTier = tier['next_tier'] as String?;
+    final votesNeeded = tier['votes_needed_for_next'] as int? ?? 0;
+    final votesForCurrent = tier['votes_for_current_tier'] as int? ?? 0;
+    final thresholds = Map<String, int>.from(
+      (tier['thresholds'] as Map? ?? {}).map((k, v) => MapEntry(k.toString(), (v as num).toInt())),
+    );
+
+    // Progress within current tier range
+    double progress = 0.0;
+    if (nextTier != null && thresholds.containsKey(nextTier)) {
+      final target = thresholds[nextTier]!;
+      final start = votesForCurrent;
+      progress = (currentVotes - start).clamp(0, target - start) / (target - start).clamp(1, 999999);
+    } else {
+      progress = 1.0; // at national level already
+    }
+
+    final tierData = [
+      _TierInfo('Street', 'street', Icons.home, const Color(0xFF6B7280), 0),
+      _TierInfo('LGA', 'lga', Icons.location_city, const Color(0xFF059669), thresholds['lga'] ?? 50),
+      _TierInfo('State', 'state', Icons.star, const Color(0xFF2563EB), thresholds['state'] ?? 200),
+      _TierInfo('National', 'national', Icons.flag, const Color(0xFFD97706), thresholds['national'] ?? 500),
+    ];
+
+    final currentTierIdx = ['street', 'lga', 'state', 'national'].indexOf(currentLevel);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 24),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text('🏆', style: TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
+              const Text(
+                'Competition Journey',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: _tierColor(currentLevel).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _tierColor(currentLevel).withOpacity(0.4)),
+                ),
+                child: Text(
+                  _tierEmoji(currentLevel) + ' ' + currentLevel.toUpperCase(),
+                  style: TextStyle(
+                    color: _tierColor(currentLevel),
+                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Tier milestones row
+          Row(
+            children: List.generate(tierData.length, (i) {
+              final t = tierData[i];
+              final isReached = i <= currentTierIdx;
+              final isCurrent = i == currentTierIdx;
+              return Expanded(
+                child: Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        if (i < tierData.length - 1)
+                          Positioned(
+                            right: 0,
+                            child: Container(
+                              height: 3,
+                              width: double.infinity,
+                              color: isReached && !isCurrent
+                                  ? t.color
+                                  : Colors.grey.shade200,
+                            ),
+                          ),
+                        Container(
+                          width: isCurrent ? 44 : 36,
+                          height: isCurrent ? 44 : 36,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isReached ? t.color : Colors.grey.shade100,
+                            border: isCurrent
+                                ? Border.all(color: t.color, width: 3)
+                                : null,
+                            boxShadow: isCurrent
+                                ? [BoxShadow(color: t.color.withOpacity(0.4), blurRadius: 10, spreadRadius: 2)]
+                                : null,
+                          ),
+                          child: Icon(
+                            t.icon,
+                            size: isCurrent ? 22 : 16,
+                            color: isReached ? Colors.white : Colors.grey.shade400,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      t.label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: isCurrent ? FontWeight.bold : FontWeight.normal,
+                        color: isReached ? t.color : Colors.grey.shade400,
+                      ),
+                    ),
+                    if (t.votes > 0)
+                      Text(
+                        '${t.votes}v',
+                        style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.grey.shade400,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 20),
+
+          // Progress bar to next tier
+          if (nextTier != null) ...[
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  '$currentVotes votes',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                Text(
+                  '$votesNeeded more to reach ${nextTier.toUpperCase()}',
+                  style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: TweenAnimationBuilder<double>(
+                tween: Tween(begin: 0.0, end: progress),
+                duration: const Duration(milliseconds: 900),
+                curve: Curves.easeInOut,
+                builder: (context, val, _) => LinearProgressIndicator(
+                  value: val,
+                  minHeight: 10,
+                  backgroundColor: Colors.grey.shade100,
+                  valueColor: AlwaysStoppedAnimation<Color>(_tierColor(nextTier)),
+                ),
+              ),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                const Icon(Icons.emoji_events, color: Color(0xFFD97706), size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  'National level reached with $currentVotes votes!',
+                  style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Color _tierColor(String level) {
+    return switch (level) {
+      'lga'      => const Color(0xFF059669),
+      'state'    => const Color(0xFF2563EB),
+      'national' => const Color(0xFFD97706),
+      _          => const Color(0xFF6B7280),
+    };
+  }
+
+  String _tierEmoji(String level) {
+    return switch (level) {
+      'lga'      => '🌍',
+      'state'    => '🌟',
+      'national' => '🇳🇬',
+      _          => '🏠',
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -767,6 +1050,14 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                   ),
                   const SizedBox(height: 24),
 
+                  // Tier promotion live banner
+                  if (_promotionBanner != null)
+                    _buildPromotionBanner(_promotionBanner!),
+
+                  // Tier progression panel
+                  if (_entry['tier_progress'] != null)
+                    _buildTierProgressPanel(_entry['tier_progress']),
+
                   // Head to head challenge simulation
                   if (_showChallenge)
                     Container(
@@ -849,4 +1140,15 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
       ),
     );
   }
+}
+
+/// Data class for a single tier milestone in the Competition Journey panel.
+class _TierInfo {
+  final String label;
+  final String level;
+  final IconData icon;
+  final Color color;
+  final int votes; // threshold votes to reach this tier (0 for street)
+
+  const _TierInfo(this.label, this.level, this.icon, this.color, this.votes);
 }

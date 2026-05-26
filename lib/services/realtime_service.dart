@@ -60,9 +60,13 @@ class RealtimeService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _voteController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final _tierController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get coinStream => _coinController.stream;
   Stream<Map<String, dynamic>> get voteStream => _voteController.stream;
+  /// Emits {entry_id, new_level, vote_count, entry_owner_name, category_name}
+  Stream<Map<String, dynamic>> get tierStream => _tierController.stream;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -110,6 +114,7 @@ class RealtimeService {
     disconnect();
     _coinController.close();
     _voteController.close();
+    _tierController.close();
   }
 
   // ── Message handling ───────────────────────────────────────────────────────
@@ -169,6 +174,11 @@ class RealtimeService {
         case 'vote.cast':
           if (!_voteController.isClosed) _voteController.add(data);
           debugPrint('[Reverb] 🗳 vote.cast ch=$channel data=$data');
+          break;
+
+        case 'tier.promoted':
+          if (!_tierController.isClosed) _tierController.add(data);
+          debugPrint('[Reverb] 🏆 tier.promoted ch=$channel data=$data');
           break;
 
         default:

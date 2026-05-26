@@ -37,10 +37,36 @@ class _EntrySubmissionScreenState extends ConsumerState<EntrySubmissionScreen> {
   String _categoryIcon = '🛁';
   double _entryFee = 100.00;
 
+  // Dynamic user location values
+  String? _userState;
+  String? _userLga;
+  String? _userNeighbourhood;
+  bool _isLoadingProfile = true;
+
   @override
   void initState() {
     super.initState();
     _fetchCategoryMeta();
+    _fetchUserProfile();
+  }
+
+  Future<void> _fetchUserProfile() async {
+    try {
+      final response = await ref.read(apiServiceProvider).get('/profile');
+      if (response.data['success'] == true) {
+        final user = response.data['data']['user'];
+        setState(() {
+          _userState = user['state'];
+          _userLga = user['lga'];
+          _userNeighbourhood = user['neighbourhood'];
+          _isLoadingProfile = false;
+        });
+      }
+    } catch (_) {
+      setState(() {
+        _isLoadingProfile = false;
+      });
+    }
   }
 
   void _fetchCategoryMeta() {
@@ -109,6 +135,7 @@ class _EntrySubmissionScreenState extends ConsumerState<EntrySubmissionScreen> {
       final dio.FormData formData = dio.FormData.fromMap({
         'category_id': widget.categoryId,
         'caption': _captionController.text.trim(),
+        'auto_enhance': _autoEnhance ? 1 : 0,
       });
 
       if (kIsWeb) {
@@ -395,18 +422,31 @@ class _EntrySubmissionScreenState extends ConsumerState<EntrySubmissionScreen> {
                 const SizedBox(height: 12),
 
                 // Location Pill Confirmation
-                Row(
-                  children: [
-                    const Icon(Icons.location_on, color: AppColors.accentGold, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Competing in: Naibawa Street, Tarauni LGA, Kano',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkText, fontWeight: FontWeight.w600),
+                if (!_isLoadingProfile)
+                  Row(
+                    children: [
+                      const Icon(Icons.location_on, color: AppColors.accentGold, size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Competing in: ${_userNeighbourhood ?? 'Naibawa'}, ${_userLga ?? 'Tarauni LGA'}, ${_userState ?? 'Kano'}',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.darkText, fontWeight: FontWeight.w600),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  )
+                else
+                  const Row(
+                    children: [
+                      SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
+                      ),
+                      SizedBox(width: 8),
+                      Text('Loading competition zone...', style: TextStyle(fontSize: 12, color: AppColors.mutedGray)),
+                    ],
+                  ),
                 const SizedBox(height: 30),
 
                 // Pricing Summary Table

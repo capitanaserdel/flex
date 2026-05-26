@@ -118,6 +118,10 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       _errorMessage = null;
     });
 
+    double latitude = 11.9177;
+    double longitude = 8.4576;
+    bool isMocked = false;
+
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -136,105 +140,155 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         throw 'Location permissions are permanently denied.';
       }
 
+      // Add a 4 second timeout for getting position so it doesn't hang in emulator
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 4),
       );
+      latitude = position.latitude;
+      longitude = position.longitude;
+    } catch (e) {
+      debugPrint('[Geolocator] Current position error: $e. Falling back to Panshekara/Kumbotso.');
+      isMocked = true;
+      latitude = 11.9177;
+      longitude = 8.4576;
+    }
 
-      // Perform real reverse-geocoding using OpenStreetMap Nominatim API
-      String displayName = "";
-      try {
-        final dio = Dio();
-        final response = await dio.get(
-          'https://nominatim.openstreetmap.org/reverse',
-          queryParameters: {
-            'format': 'json',
-            'lat': position.latitude,
-            'lon': position.longitude,
-            'zoom': 18,
-            'addressdetails': 1,
+    String displayName = "";
+    try {
+      final dio = Dio();
+      final response = await dio.get(
+        'https://nominatim.openstreetmap.org/reverse',
+        queryParameters: {
+          'format': 'json',
+          'lat': latitude,
+          'lon': longitude,
+          'zoom': 18,
+          'addressdetails': 1,
+        },
+        options: Options(
+          headers: {
+            'User-Agent': 'SallahFlexApp/1.0 (contact@sallahflex.ng)',
           },
-          options: Options(
-            headers: {
-              'User-Agent': 'SallahFlexApp/1.0 (contact@sallahflex.ng)',
-            },
-          ),
-        );
-        if (response.data != null && response.data['display_name'] != null) {
-          displayName = response.data['display_name'].toString();
-        }
-      } catch (e) {
-        debugPrint('[Geolocator] Reverse geocoding error: $e');
-      }
-
-      if (displayName.isEmpty) {
-        displayName = "Lat: ${position.latitude.toStringAsFixed(4)}, Lon: ${position.longitude.toStringAsFixed(4)}";
-      } else {
-        // Truncate overly long display names
-        if (displayName.length > 80) {
-          displayName = displayName.substring(0, 80) + "...";
-        }
-        displayName = "$displayName (Lat: ${position.latitude.toStringAsFixed(4)}, Lon: ${position.longitude.toStringAsFixed(4)})";
-      }
-
-      // Check if the geocoded address matches our seeded Kano locations
-      final lowerAddress = displayName.toLowerCase();
-      int stateId = 1; // Default to Kano State
-      int lgaId = 1;   // Default to Tarauni LGA
-      int neighbourhoodId = 1; // Default to Naibawa
-
-      if (lowerAddress.contains('kano')) {
-        stateId = 1;
-        if (lowerAddress.contains('tarauni')) {
-          lgaId = 1;
-          if (lowerAddress.contains('naibawa')) {
-            neighbourhoodId = 1;
-          } else if (lowerAddress.contains('tarauni')) {
-            neighbourhoodId = 2; // Tarauni neighbourhood
-          }
-        }
-      }
-
-      setState(() {
-        _locationController.text = displayName;
-        _selectedStateId = stateId;
-        _selectedLgaId = lgaId;
-        _selectedNeighbourhoodId = neighbourhoodId;
-      });
-
-      await _fetchLgas(stateId);
-      await _fetchNeighbourhoods(lgaId);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('📍 Exact location detected successfully!'),
-            backgroundColor: AppColors.successGreen,
-          ),
-        );
+        ),
+      );
+      if (response.data != null && response.data['display_name'] != null) {
+        displayName = response.data['display_name'].toString();
       }
     } catch (e) {
-      // If permission fails or coordinates fail in Simulator, provide smooth mock-up fallback!
-      setState(() {
-        _locationController.text = "Tarauni Road, Kano State, Nigeria (Auto-Detected)";
-        _selectedStateId = 1;
-        _selectedLgaId = 1;
-        _selectedNeighbourhoodId = 1;
-      });
-      await _fetchLgas(1);
-      await _fetchNeighbourhoods(1);
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('📍 Detected: ${_locationController.text}'),
-            backgroundColor: AppColors.primary,
-          ),
-        );
+      debugPrint('[Geolocator] Reverse geocoding error: $e');
+    }
+
+    if (displayName.isEmpty) {
+      if (isMocked) {
+        displayName = "Bakin Ruwa, Panshekara, Kumbotso, Kano State, Nigeria";
+      } else {
+        displayName = "Lat: ${latitude.toStringAsFixed(4)}, Lon: ${longitude.toStringAsFixed(4)}";
       }
-    } finally {
+    } else {
+      // Truncate overly long display names
+      if (displayName.length > 80) {
+        displayName = displayName.substring(0, 80) + "...";
+      }
+      displayName = "$displayName (Lat: ${latitude.toStringAsFixed(4)}, Lon: ${longitude.toStringAsFixed(4)})";
+    }
+
+    if (isMocked) {
+      displayName = "$displayName (Auto-Detected)";
+    }
+
+    await _matchAndSetLocation(displayName);
+  }
+
+  Future<void> _matchAndSetLocation(String addressText) async {
+    final lowerAddress = addressText.toLowerCase();
+
+    if (_states.isEmpty) {
+      await _fetchStates();
+    }
+
+    // 1. Match State
+    int? matchedStateId;
+    for (var state in _states) {
+      final stateName = state['name'].toString().toLowerCase().replaceAll('state', '').trim();
+      if (lowerAddress.contains(stateName)) {
+        matchedStateId = state['id'] as int;
+        break;
+      }
+    }
+
+    // Default to Kano State (id: 1) if not matched
+    if (matchedStateId == null && _states.isNotEmpty) {
+      matchedStateId = _states.first['id'] as int;
+    }
+
+    if (matchedStateId != null) {
       setState(() {
-        _isLoadingLocation = false;
+        _selectedStateId = matchedStateId;
       });
+      await _fetchLgas(matchedStateId);
+
+      // 2. Match LGA
+      int? matchedLgaId;
+      for (var lga in _lgas) {
+        final lgaName = lga['name'].toString().toLowerCase().replaceAll('lga', '').trim();
+        if (lowerAddress.contains(lgaName)) {
+          matchedLgaId = lga['id'] as int;
+          break;
+        }
+      }
+
+      // Default to Kumbotso LGA or first LGA if not found
+      if (matchedLgaId == null && _lgas.isNotEmpty) {
+        for (var lga in _lgas) {
+          final lgaName = lga['name'].toString().toLowerCase().replaceAll('lga', '').trim();
+          if (lgaName == 'kumbotso' && (lowerAddress.contains('panshekara') || lowerAddress.contains('bakin ruwa'))) {
+            matchedLgaId = lga['id'] as int;
+            break;
+          }
+        }
+        matchedLgaId ??= _lgas.first['id'] as int;
+      }
+
+      if (matchedLgaId != null) {
+        setState(() {
+          _selectedLgaId = matchedLgaId;
+        });
+        await _fetchNeighbourhoods(matchedLgaId);
+
+        // 3. Match Neighbourhood
+        int? matchedNeighbourhoodId;
+        for (var neighbourhood in _neighbourhoods) {
+          final nName = neighbourhood['name'].toString().toLowerCase().trim();
+          if (lowerAddress.contains(nName)) {
+            matchedNeighbourhoodId = neighbourhood['id'] as int;
+            break;
+          }
+        }
+
+        // If not matched, try fallback matching
+        if (matchedNeighbourhoodId == null && _neighbourhoods.isNotEmpty) {
+          matchedNeighbourhoodId = _neighbourhoods.first['id'] as int;
+        }
+
+        setState(() {
+          _selectedNeighbourhoodId = matchedNeighbourhoodId;
+        });
+      }
+    }
+
+    setState(() {
+      _locationController.text = addressText;
+      _isLoadingLocation = false;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('📍 Location detected: $addressText'),
+          backgroundColor: AppColors.successGreen,
+        ),
+      );
     }
   }
 

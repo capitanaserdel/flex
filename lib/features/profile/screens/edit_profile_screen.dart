@@ -66,7 +66,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     final storage = ref.read(storageServiceProvider);
     await storage.clearAll();
     if (mounted) {
-      context.go('/login');
+      context.go('/register');
     }
   }
 

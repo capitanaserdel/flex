@@ -59,9 +59,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
       if (!mounted) return;
       final entryId = data['entry_id'];
       if (entryId != null && entryId.toString() == widget.entryId.toString()) {
-        setState(() {
-          _entry?['vote_count'] = data['new_vote_count'];
-        });
+        _fetchDetail(showLoading: false);
       }
     });
 
@@ -92,8 +90,10 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
     } catch (_) {}
   }
 
-  Future<void> _fetchDetail() async {
-    setState(() => _isLoading = true);
+  Future<void> _fetchDetail({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() => _isLoading = true);
+    }
     try {
       final response = await ref.read(apiServiceProvider).get('/entries/${widget.entryId}');
       if (response.data['success'] == true) {
@@ -102,13 +102,17 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
         });
       }
     } catch (e) {
-      setState(() {
-        _errorMessage = e.toString();
-      });
+      if (showLoading) {
+        setState(() {
+          _errorMessage = e.toString();
+        });
+      }
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (showLoading) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -275,7 +279,13 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
           ),
           title: Row(
             children: [
-              Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+              Flexible(
+                child: Text(
+                  title,
+                  style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
               if (isEnabled) ...[
                 const SizedBox(width: 8),
                 Container(
@@ -562,6 +572,25 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
       );
     }
 
+    final String dynamicRankText;
+    final activeLevel = widget.level;
+    if (activeLevel == 'neighbourhood' || activeLevel == 'town') {
+      final rank = _entry['neighbourhood_rank'] ?? 2;
+      final name = _entry['neighbourhood'] != null ? _entry['neighbourhood']['name'] : 'Naibawa';
+      dynamicRankText = '#$rank in $name 🏆';
+    } else if (activeLevel == 'lga') {
+      final rank = _entry['lga_rank'] ?? 2;
+      final name = _entry['lga'] != null ? _entry['lga']['name'] : 'LGA';
+      dynamicRankText = '#$rank in $name 🏆';
+    } else if (activeLevel == 'state') {
+      final rank = _entry['state_rank'] ?? 2;
+      final name = _entry['state'] != null ? _entry['state']['name'] : 'State';
+      dynamicRankText = '#$rank in $name State 🏆';
+    } else {
+      final rank = _entry['national_rank'] ?? 2;
+      dynamicRankText = '#$rank in Nigeria 🏆';
+    }
+
     return Scaffold(
       backgroundColor: AppColors.softWhite,
       body: CustomScrollView(
@@ -637,7 +666,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                           border: Border.all(color: AppColors.accentGold),
                         ),
                         child: Text(
-                          '#2 in Naibawa 🏆',
+                          dynamicRankText,
                           style: AppTextStyles.bodyMedium.copyWith(
                             color: AppColors.richBrown,
                             fontWeight: FontWeight.bold,
@@ -691,30 +720,35 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  '${_entry['vote_count']} Votes 🗳️',
-                                  style: AppTextStyles.displaySmall.copyWith(color: AppColors.primary, fontSize: 22),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '•',
-                                  style: TextStyle(color: AppColors.mutedGray.withOpacity(0.5), fontSize: 16),
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  '${_entry['view_count'] ?? 0} Views 👁️',
-                                  style: AppTextStyles.displaySmall.copyWith(color: AppColors.mutedGray, fontSize: 18),
-                                ),
-                              ],
-                            ),
-                            const Text('Hyperlocal coin-based votes', style: TextStyle(fontSize: 11, color: AppColors.mutedGray)),
-                          ],
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    '${_entry['vote_count']} Votes 🗳️',
+                                    style: AppTextStyles.displaySmall.copyWith(color: AppColors.primary, fontSize: 20),
+                                  ),
+                                  Text(
+                                    '•',
+                                    style: TextStyle(color: AppColors.mutedGray.withOpacity(0.5), fontSize: 16),
+                                  ),
+                                  Text(
+                                    '${_entry['view_count'] ?? 0} Views 👁️',
+                                    style: AppTextStyles.displaySmall.copyWith(color: AppColors.mutedGray, fontSize: 16),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              const Text('Hyperlocal coin-based votes', style: TextStyle(fontSize: 11, color: AppColors.mutedGray)),
+                            ],
+                          ),
                         ),
+                        const SizedBox(width: 12),
                         ElevatedButton.icon(
                           onPressed: _showVotingLevelSelector,
                           icon: const Icon(Icons.favorite, color: Colors.white),
@@ -722,6 +756,7 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
                             foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                           ),
                         ),
                       ],

@@ -29,6 +29,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // Countdown timer parameters
   late Timer _countdownTimer;
   Duration _timeLeft = const Duration(days: 5, hours: 14, minutes: 22);
+  StreamSubscription? _coinSubscription;
 
   @override
   void initState() {
@@ -38,6 +39,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _fetchFeed();
     _fetchCoinsBalance();
     _startCountdown();
+    _initRealtime();
+  }
+
+  void _initRealtime() {
+    final storage = ref.read(storageServiceProvider);
+    final token = storage.getToken();
+    final userId = storage.getUserId();
+    if (token != null) {
+      final realtime = ref.read(realtimeServiceProvider);
+      // Idempotent connect call
+      realtime.connect(jwtToken: token).then((_) {
+        if (userId != null) {
+          realtime.subscribeToCoins(userId);
+        }
+      });
+
+      _coinSubscription?.cancel();
+      _coinSubscription = realtime.coinStream.listen((data) {
+        if (!mounted) return;
+        final newBalance = data['new_balance'] ?? data['paid_votes_remaining'];
+        if (newBalance != null) {
+          setState(() {
+            _coinsBalance = int.tryParse(newBalance.toString()) ?? _coinsBalance;
+          });
+        }
+      });
+    }
   }
 
   Future<void> _fetchCoinsBalance() async {
@@ -435,6 +463,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   void dispose() {
     _countdownTimer.cancel();
+    _coinSubscription?.cancel();
     super.dispose();
   }
 

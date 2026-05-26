@@ -47,9 +47,17 @@ class _SplashScreenState extends ConsumerState<SplashScreen> with SingleTickerPr
       final hasSeenOnboarding = storage.getHasSeenOnboarding();
 
       if (token != null) {
+        // Connect WebSocket and subscribe to private coin channel on auto-login
+        final int? userId = storage.getUserId();
+        final realtime = ref.read(realtimeServiceProvider);
+        realtime.connect(jwtToken: token).then((_) {
+          if (userId != null) {
+            realtime.subscribeToCoins(userId);
+          }
+        });
         context.go('/home');
       } else if (hasSeenOnboarding) {
-        context.go('/login');
+        context.go('/register');
       } else {
         context.go('/onboarding');
       }

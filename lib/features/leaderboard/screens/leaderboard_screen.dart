@@ -186,7 +186,7 @@ class _LeaderboardScreenState extends ConsumerState<LeaderboardScreen> {
                                           const Icon(Icons.favorite, color: AppColors.primary, size: 16),
                                         ],
                                       ),
-                                      onTap: () => context.push('/entry/${entry['id']}'),
+                                      onTap: () => context.push('/entry/${entry['id']}?level=$_selectedLevel'),
                                     ),
                                   );
                                 },

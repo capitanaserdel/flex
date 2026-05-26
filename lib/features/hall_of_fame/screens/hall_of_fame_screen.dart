@@ -145,7 +145,7 @@ class _HallOfFameScreenState extends ConsumerState<HallOfFameScreen> {
                               side: const BorderSide(color: AppColors.accentGold, width: 2),
                             ),
                             child: InkWell(
-                              onTap: () => context.push('/entry/${champ['id']}'),
+                              onTap: () => context.push('/entry/${champ['id']}?level=national'),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [

@@ -9,10 +9,12 @@ import '../../../providers/service_providers.dart';
 
 class EntryDetailScreen extends ConsumerStatefulWidget {
   final int entryId;
+  final String level;
 
   const EntryDetailScreen({
     super.key,
     required this.entryId,
+    this.level = 'neighbourhood',
   });
 
   @override
@@ -227,37 +229,96 @@ class _EntryDetailScreenState extends ConsumerState<EntryDetailScreen> {
   }
 
   Widget _buildLevelVoteOption(String levelCode, String title, String priceText, String description) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-          )
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: const CircleAvatar(
-          backgroundColor: AppColors.warmCream,
-          child: Text('🗳️', style: TextStyle(fontSize: 20)),
+    final String normalizedActiveLevel;
+    if (widget.level == 'neighbourhood') {
+      normalizedActiveLevel = 'town';
+    } else if (widget.level == 'nation') {
+      normalizedActiveLevel = 'national';
+    } else {
+      normalizedActiveLevel = widget.level;
+    }
+
+    final bool isEnabled = levelCode == normalizedActiveLevel;
+
+    final String feedName = switch (levelCode) {
+      'town' => 'Street',
+      'lga' => 'LGA',
+      'state' => 'State',
+      'national' => 'Nigeria',
+      _ => '',
+    };
+
+    final String displayDescription = isEnabled 
+        ? description 
+        : '$description (Switch to $feedName feed)';
+
+    return Opacity(
+      opacity: isEnabled ? 1.0 : 0.5,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: isEnabled ? Border.all(color: AppColors.primary.withOpacity(0.3), width: 1.5) : null,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.03),
+              blurRadius: 8,
+            )
+          ],
         ),
-        title: Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
-        subtitle: Text(description, style: AppTextStyles.bodySmall.copyWith(color: AppColors.mutedGray)),
-        trailing: ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            _vote(levelCode);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          leading: const CircleAvatar(
+            backgroundColor: AppColors.warmCream,
+            child: Text('🗳️', style: TextStyle(fontSize: 20)),
           ),
-          child: Text(priceText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          title: Row(
+            children: [
+              Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold)),
+              if (isEnabled) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.successGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'Active Feed',
+                    style: TextStyle(
+                      color: AppColors.successGreen,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 4.0),
+            child: Text(
+              displayDescription, 
+              style: AppTextStyles.bodySmall.copyWith(
+                color: isEnabled ? AppColors.mutedGray : AppColors.errorRed.withOpacity(0.7),
+                fontWeight: isEnabled ? FontWeight.normal : FontWeight.w500,
+              ),
+            ),
+          ),
+          trailing: ElevatedButton(
+            onPressed: isEnabled ? () {
+              Navigator.pop(context);
+              _vote(levelCode);
+            } : null,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: isEnabled ? AppColors.primary : Colors.grey.shade300,
+              foregroundColor: isEnabled ? Colors.white : Colors.grey.shade600,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              elevation: isEnabled ? 2 : 0,
+            ),
+            child: Text(priceText, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
         ),
       ),
     );

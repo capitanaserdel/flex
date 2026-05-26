@@ -911,7 +911,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
                         // Contest Photo
                         GestureDetector(
-                          onTap: () => context.push('/entry/${entry['id']}'),
+                          onTap: () => context.push('/entry/${entry['id']}?level=$_selectedLevel'),
                           child: Container(
                             height: 250,
                             width: double.infinity,

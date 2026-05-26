@@ -77,7 +77,8 @@ class SallahFlexApp extends StatelessWidget {
           path: '/entry/:id',
           builder: (context, state) {
             final id = int.tryParse(state.pathParameters['id'] ?? '') ?? 1;
-            return EntryDetailScreen(entryId: id);
+            final level = state.uri.queryParameters['level'] ?? 'neighbourhood';
+            return EntryDetailScreen(entryId: id, level: level);
           },
         ),
         GoRoute(
